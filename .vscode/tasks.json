@@ -1,0 +1,36 @@
+{
+    "version": "2.0.0",
+    "tasks": [
+        {
+            "label": "Run",
+            "type": "shell",
+            "command": "python main.py",
+            "problemMatcher": [],
+            "group": {
+                "kind": "build",
+                "isDefault": true
+            }
+        },
+        {
+            "label": "Test",
+            "type": "shell",
+            "command": "pytest",
+            "problemMatcher": [],
+            "group": {
+                "kind": "test",
+                "isDefault": true
+            }
+        },
+        {
+            "label": "Debug",
+            "type": "shell",
+            "command": "code",
+            "args": ["--launch", "${workspaceFolder}/.vscode/launch.json"],
+            "problemMatcher": [],
+            "group": {
+              "kind": "build",
+              "isDefault": false
+            }
+          }
+    ]
+}
