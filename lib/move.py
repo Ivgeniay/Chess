@@ -73,3 +73,5 @@ class Move(Enum.Enum):
     h6 = (5, 7)
     h7 = (6, 7)
     h8 = (7, 7)
+
+    NULL = '-'

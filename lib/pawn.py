@@ -32,10 +32,9 @@ class Pawn(Figure):
         return attack_cells
 
     def last_action(self) -> None:
-        self.can_enpassant = False
-        if abs(self.positions[-1].value[0] - self.positions[-2].value[0]) == 2:
+        if self.can_enpassant and abs(self.positions[-1].value[0] - self.positions[-2].value[0]) == 2:
             self.is_enpassant = True
-        pass
+        self.can_enpassant = False
 
     # TODO: доделать возможность превращения пешки
     def is_possible_move(self, move: Move) -> bool:

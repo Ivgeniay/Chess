@@ -60,10 +60,10 @@ class Application:
 
         # NOTE: FEN sample
         # fen = "r3k2r/3b4/pqn1pnp1/1ppp1p1p/PbPP1PBP/BPNQPNP1/8/R3K2R b KQkq - 13 14"
-        fen = "rnbqkbnr/ppppp1pp/8/P7/5p2/8/1PPPPPPP/RNBQKBNR w KQkq - 2 2"
-        self.chess.from_fen(fen)
-        self.figureManager.restart()
-        self.chess.start(False)
+        # fen = "rnbqkbnr/ppppp1pp/8/P7/5p2/8/1PPPPPPP/RNBQKBNR w KQkq - 2 2"
+        # self.chess.from_fen(fen)
+        # self.figureManager.restart()
+        # self.chess.start(False)
 
         while self.running:
             self.drawer.clear()

@@ -66,7 +66,7 @@ class Chess:
 
         self.controll_side: Side = Side.NONE
         self.controll_castling: Castling = Castling.Both
-        self.controll_enpassant = "-"
+        self.controll_enpassant: Move = Move.NULL
 
         # NOTE: white side move
         self.move_number = 0
@@ -158,7 +158,7 @@ class Chess:
                     self.controll_castling = Castling.BLACK
 
         # 4. Поле взятия на проходе
-        self.controll_enpassant = enpassant_fen
+        self.controll_enpassant = Move(enpassant_fen)
 
         # 5. Полусчётчик ходов (правило 50 ходов)
         self.half_move_number = int(halfmove_fen)
@@ -193,7 +193,7 @@ class Chess:
             castling_fen = "-"
 
         # NOTE: Поле для взятия на проходе
-        enpassant_fen = self.controll_enpassant
+        enpassant_fen = self.controll_enpassant.name if self.controll_enpassant != Move.NULL else "-"
 
         # NOTE: Полусчётчик ходов (правило 50 ходов)
         halfmove_fen = str(self.half_move_number)
@@ -231,11 +231,11 @@ class Chess:
                 self.board[old_position.value[0]][old_position.value[1]] = None
                 figure.set_new_position(move_to)
 
-        self.nullify_on_passant(figure)
         figure.last_action()
+        self.nullify_on_passant(figure)
         self.next_turn()
 
-        print(move_to.value)
+        print(move_to.value, move_to.name)
 
     def castling(self, castling_type: CastlingType) -> None:
         """
@@ -328,11 +328,34 @@ class Chess:
     def nullify_on_passant(self, sender) -> None:
         """
         Отмена возможности взятия на проходе у всех пешек, кроме отправителя. Поскольку пешка, которая сделала ход на 2 клетки, может быть взята на проходе на следующем ходу.
+        Так же обновляем данные для строки FEN
         """
+        is_there = False
+
         for row in self.board:
             for figure in row:
-                if figure != None and isinstance(figure, Pawn) and figure != sender:
-                    figure.is_enpassant = False
+                if figure != None and isinstance(figure, Pawn):
+                    if figure != sender:
+                        figure.is_enpassant = False
+                    elif figure.is_enpassant:  # Если отправитель имеет взятие на проходе
+                        is_there = True
+                        direction = -1 if figure.side == Side.WHITE else 1
+                        pawn_row, pawn_col = figure.position.value
+                        enpassant_move = Move((pawn_row + direction, pawn_col))
+
+        self.controll_enpassant = enpassant_move if is_there else Move.NULL
+
+        # if is_there and figure.is_enpassant:
+        #     if abs(figure.positions[-1].value[0] - figure.positions[-2].value[0]) == 2:
+        #         figure.is_enpassant = True
+        #         if figure.side == Side.WHITE:
+        #             self.controll_enpassant = Move(
+        #                 (figure.position.value[0] - 1, figure.position.value[1]))
+        #         else:
+        #             self.controll_enpassant = Move(
+        #                 (figure.position.value[0] + 1, figure.position.value[1]))
+        # else:
+        #     self.controll_enpassant = Move.NULL
 
     def next_turn(self) -> None:
         """
