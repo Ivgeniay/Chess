@@ -1,4 +1,4 @@
-from game.entities.FiguresManager import FigureManager
+from game.entities.FiguresManager import FigureDisplayManager
 from game.entities.abstract.IUpdatable import IUpdatable
 from game.entities.abstract.IDrawable import IDrawable
 from game.entities.abstract.Entity import Entity
@@ -29,7 +29,8 @@ class Application:
         self.chess: Chess = Chess()
         self.input: Input = Input()
         self.board: Board = Board()
-        self.figureManager = FigureManager(self.chess, self.board, self.input)
+        self.figureManager = FigureDisplayManager(
+            self.chess, self.board, self.input)
 
         self.restart_btn = Button(BTN_POSITION[0], BTN_POSITION[1], BTN_WIDTH,
                                   BTN_HEIGHT, self.input, text="Restart", action=self.restart)
@@ -55,7 +56,14 @@ class Application:
 
     def run(self) -> None:
         self.running = True
-        self.chess.next_turn()
+        self.chess.start()
+
+        # NOTE: FEN sample
+        # fen = "r3k2r/3b4/pqn1pnp1/1ppp1p1p/PbPP1PBP/BPNQPNP1/8/R3K2R b KQkq - 13 14"
+        fen = "rnbqkbnr/ppppp1pp/8/P7/5p2/8/1PPPPPPP/RNBQKBNR w KQkq - 2 2"
+        self.chess.from_fen(fen)
+        self.figureManager.restart()
+        self.chess.start(False)
 
         while self.running:
             self.drawer.clear()

@@ -5,4 +5,4 @@ class Castling(Enum.Enum):
     WHITE = "KQ"
     BLACK = "kq"
     Both = "KQkq"
-    NoneCastling = " "
+    NoneCastling = "_"

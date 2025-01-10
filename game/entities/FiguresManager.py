@@ -8,7 +8,7 @@ from game.settings import *
 import pygame as pg
 
 
-class FigureManager(IDrawable, IUpdatable):
+class FigureDisplayManager(IDrawable, IUpdatable):
     from lib.chess import Chess
 
     def __init__(self, chess: Chess, board: Board, input: Input) -> None:
@@ -27,7 +27,6 @@ class FigureManager(IDrawable, IUpdatable):
 
     def restart(self):
         self.recall_figures(self.chess)
-        self.initialize_figures()
 
     def download_sprites(self) -> None:
         """
@@ -70,9 +69,10 @@ class FigureManager(IDrawable, IUpdatable):
 
     def recall_figures(self, chess: Chess) -> None:
         """
-        Метод для обновления списка фигур на доске.
+        Метод для обновления списка фигур на доске и правильного их позиционирования.
         """
         self.figures = chess.get_figure_list()
+        self.initialize_figures()
 
     def draw(self, surface: pg.surface.Surface) -> None:
         for figure in self.figures:
@@ -147,7 +147,7 @@ class FigureManager(IDrawable, IUpdatable):
 
                     pos = self.board.get_cell_info_by_move(new_pos)
                     self.dragging_object.rect = (pos[0], pos[1])
-                    self.dragging_object.move(new_pos)
+                    self.chess.move_figure(self.dragging_object, new_pos)
                 else:
                     self.dragging_object.rect = self.board.get_cell_info_by_move(
                         self.dragging_object.position)

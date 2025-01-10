@@ -32,13 +32,21 @@ class Figure(ABC):
         """
         return True
 
-    @abstractmethod
     def get_possible_moves(self, is_under_protection_figure: bool = False) -> list[Move]:
         """
         Возвращает все возможные вертикальные и горизонтальные ходы, 
         отсеивая невозможные перемещения в соответствии с правилами.
         """
-        return []
+        return self.chess.get_figure_possible_moves(self, is_under_protection_figure)
+
+    def set_new_position(self, move: Move) -> None:
+        """
+        Устанавливает новую позицию фигуры на доске.
+
+        :param move: Клетка, на которую пытается сделать ход фигура.
+        """
+        self.position = move
+        self.positions.append(move)
 
     def last_action(self) -> None:
         """
@@ -48,29 +56,12 @@ class Figure(ABC):
         """
         pass
 
-    def move(self, move_to: Move) -> None:
-        """
-        Метод перемещения фигуры на указанную клетку. При этом уничтожается фигура, если она находится на клетке назначения. Передача хода.
-
-        :param move_to: Клетка, на которую пытается сделать ход фигура.
-        """
-        old_position: Move = self.position
-        self.position: Move = move_to
-        if self.chess.board[move_to.value[0]][move_to.value[1]] != None:
-            self.chess.board[move_to.value[0]][move_to.value[1]].destroy()
-        self.chess.board[move_to.value[0]][move_to.value[1]] = self
-        self.chess.board[old_position.value[0]
-                         ][old_position.value[1]] = None
-        self.chess.nullify_on_passat(self)
-        self.positions.append(move_to)
-        self.last_action()
-        self.chess.next_turn()
-
     def destroy(self) -> None:
         """
         Метод уничтожения фигуры. Удаляет фигуру с доски.
         """
-        self.chess.board[self.position.value[0]][self.position.value[1]] = None
+        # self.chess.board[self.position.value[0]][self.position.value[1]] = None
+        pass
 
     def is_own_cell(self, move: Move) -> bool:
         """ 
