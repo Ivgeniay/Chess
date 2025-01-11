@@ -12,5 +12,8 @@ class Queen(Figure):
         if self.is_own_cell(move) or self.is_not_own_move() or self.is_frendly_cell(move):
             return False
 
+        if self.chess.is_kingcheck_after_move(self, move):
+            return False
+
         posible_moves = self.get_possible_moves()
         return move in posible_moves

@@ -1,29 +1,40 @@
+from game.entities.abstract.ISurfaceble import ISurfaceble
 from game.entities.abstract.IUpdatable import IUpdatable
 from game.entities.abstract.IDrawable import IDrawable
 from game.entities.board import Board
-from game.input import Input
+from game.services.input import Input
+from game.services.service_locator import ServiceLocator
 from lib.move import Move
 from lib.figure import Figure
 from game.settings import *
 import pygame as pg
 
 
-class FigureDisplayManager(IDrawable, IUpdatable):
+class FigureDisplayManager(IDrawable, IUpdatable, ISurfaceble):
     from lib.chess import Chess
 
-    def __init__(self, chess: Chess, board: Board, input: Input) -> None:
-        self.chess = chess
+    # def __init__(self, chess: Chess, board: Board, input: Input, surface: pg.Surface) -> None:
+    def __init__(self, surface: pg.Surface) -> None:
+        from lib.chess import Chess
+        self.chess = ServiceLocator.get(Chess)
         self.figures = self.chess.get_figure_list()
-        self.board = board
-        self.input = input
+        self.board = ServiceLocator.get(Board)
+        self.input = ServiceLocator.get(Input)
+        self._surface = surface
 
         self.download_sprites()
         self.initialize_figures()
 
         self.dragging_object: Figure = None
 
-        self.input.mouse_left_down_register(self.start_dragging)
-        self.input.mouse_left_up_register(self.stop_dragging)
+        # self.input.mouse_left_down_register(self.start_dragging)
+        # self.input.mouse_left_up_register(self.stop_dragging)
+        self.input.mouse_left_down_register_ui(self, self.start_dragging)
+        self.input.mouse_left_up_register_ui(self, self.stop_dragging)
+
+    @property
+    def surface(self) -> pg.Surface:
+        return self._surface
 
     def restart(self):
         self.recall_figures(self.chess)
@@ -75,6 +86,7 @@ class FigureDisplayManager(IDrawable, IUpdatable):
         self.initialize_figures()
 
     def draw(self, surface: pg.surface.Surface) -> None:
+
         for figure in self.figures:
             if figure.figure_type == figure.figure_type.w_pawn:
                 scaled_piece = pg.transform.scale(

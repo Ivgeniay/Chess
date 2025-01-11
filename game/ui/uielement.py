@@ -1,20 +1,23 @@
+from game.entities.abstract.ISurfaceble import ISurfaceble
 from game.entities.abstract.IDrawable import IDrawable
-from game.input import Input
+from game.services.input import Input
+from game.services.service_locator import ServiceLocator
 from game.settings import *
 
 from abc import ABC, abstractmethod
 import pygame as pg
 
 
-class UiElement(ABC, IDrawable):
+class UiElement(ABC, IDrawable, ISurfaceble):
 
-    def __init__(self, x: int, y: int, width: int, height: int, input: Input, font: pg.font.Font = None, text: str = ""):
+    def __init__(self, x: int, y: int, width: int, height: int, font: pg.font.Font = None, text: str = "", surface: pg.Surface = None):
         self.x: int = x
         self.y: int = y
         self.width: int = width
         self.height: int = height
+        self._surface: pg.Surface = surface
         self.font: pg.font.Font = font
-        self.input: Input = input
+        self.input: Input = ServiceLocator.get(Input)
         self.is_hovered: bool = False
         self.rect: pg.Rect = pg.Rect(self.x, self.y, self.width, self.height)
         if self.font is None:
@@ -24,10 +27,14 @@ class UiElement(ABC, IDrawable):
             center=(self.rect.centerx, self.rect.centery))
 
         self.input.mouse_pos_register(self.on_mouse_pos_change)
-        self.input.mouse_left_down_register(self.on_click)
+        self.input.mouse_left_down_register_ui(self, self.on_click)
+
+    def surface(self) -> pg.Surface:
+        return self._surface
 
     @abstractmethod
     def draw(self, surface):
+        self.surface = surface
         pass
 
     def on_hover(self, value: bool):

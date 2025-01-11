@@ -1,8 +1,10 @@
+from itertools import chain
 from typing import Callable
 
 from lib.figure_fabric import FigureFabric
 from lib.castlingType import CastlingType
 from lib.figure_type import Figure_type
+from lib.moveModel import MoveModel
 from lib.castling import Castling
 from lib.figure import Figure
 from lib.bishop import Bishop
@@ -36,24 +38,32 @@ start_position: list[list[Figure_type]] = [
      Figure_type.b_king, Figure_type.b_bishop, Figure_type.b_knight, Figure_type.b_rook],
 ]
 
-# TODO: Добавить взятие на проходе
 # TODO: Добавить превращение пешки
-# TODO: Добавить шах
-# TODO: Добавить шах и мат
+# TODO: Добавить пат - когда нет ходов у игрока, но check не стоит
 
 
 class Chess:
     def __init__(self) -> None:
         self.fabric = FigureFabric(self)
         self.next_turn_handlers: list[Callable[[Chess], None]] = []
+        self.check_king = {
+            "is_check": False,
+            "possible_moves": [],
+            "attacking_figure": []
+        }
+        self.moves: list[MoveModel] = []
         self.initialize_bord()
+
+# NOTE: СЕКЦИЯ ДЛЯ РАБЫ С ИГРОВОЙ ДОСКОЙ
 
     def initialize_bord(self) -> None:
         """
         Метод инициализации доски. Создаётся двумерный массив, содержащий фигуры в начальном положении. 
         Не должен вызываться напрямую
         """
+        # NOTE: Список клеток под атакой белой стороны
         self.white_attack_cells: set[Move] = set()
+        # NOTE: Список клеток под атакой черной стороны
         self.black_attack_cells: set[Move] = set()
 
         self.board: list[list[Figure]] = [[None for _ in range(
@@ -72,19 +82,33 @@ class Chess:
         self.move_number = 0
         # NOTE: black side move
         self.half_move_number = 0
-        self.calculate_attack_positions()
-
-    def register_next_turn_handler(self, handler: Callable[["Chess"], None]) -> None:
-        """
-        Регистрация обработчика события "следующий ход".
-        """
-        self.next_turn_handlers.append(handler)
+        # self.calculate_attack_positions(self.board, self.white_attack_cells, self.black_attack_cells)
+        self.fen = {
+            "board": self.position_to_fen(),
+            "side": Side.NONE,
+            "castling": Castling.Both,
+            "enpassant": Move.NULL,
+            "halfmove": 0,
+            "move": 0
+        }
+        self.check_king["possible_moves"] = self.refresh_possible_moves_kingcheck()
 
     def get_figure_list(self):
         """
         Получение списка всех фигур на доске.
         """
         return [figure for row in self.board for figure in row if figure != None]
+
+    def destroy_all_figures(self) -> None:
+        """
+        Уничтожение всех фигур на доске.
+        """
+        for row in self.board:
+            for figure in row:
+                if figure is not None:
+                    figure.destroy()
+
+# NOTE: СЕКЦИЯ FEN
 
     def position_to_fen(self) -> str:
         """
@@ -169,7 +193,9 @@ class Chess:
         self.is_next_turn_on_start = False
 
         # Пересчитать атакующие клетки
-        self.calculate_attack_positions()
+        self.calculate_attack_positions(
+            self.board, self.white_attack_cells, self.black_attack_cells)
+        self.update_possible_moves()
 
     def get_fen(self) -> str:
         """
@@ -204,7 +230,97 @@ class Chess:
         # NOTE: Объединение всех частей
         return f"{board_fen} {side_fen} {castling_fen} {enpassant_fen} {halfmove_fen} {move_fen}"
 
+# NOTE: СЕКЦИЯ ОБЩEE
+
+    def nullify_on_passant(self, sender) -> None:
+        """
+        Отмена возможности взятия на проходе у всех пешек, кроме отправителя. Поскольку пешка, которая сделала ход на 2 клетки, может быть взята на проходе на следующем ходу.
+        Так же обновляем данные для строки FEN
+        """
+        is_there = False
+
+        for row in self.board:
+            for figure in row:
+                if figure != None and isinstance(figure, Pawn):
+                    if figure != sender:
+                        figure.is_enpassant = False
+                    elif figure.is_enpassant:  # Если отправитель имеет взятие на проходе
+                        is_there = True
+                        direction = -1 if figure.side == Side.WHITE else 1
+                        pawn_row, pawn_col = figure.position.value
+                        enpassant_move = Move((pawn_row + direction, pawn_col))
+
+        self.controll_enpassant = enpassant_move if is_there else Move.NULL
+
+    def next_turn(self) -> None:
+        """
+        Передача хода другой стороне и увеличение счётч. Пересчет возможных ходов для каждой стороны для выявления запрещенных зон для короля.
+        """
+        self.calculate_attack_positions(
+            self.board, self.white_attack_cells, self.black_attack_cells)
+        self.update_possible_moves()
+        self.inscrease_score_and_get_next_turn()
+        self.call_next_turn_event()
+        self.check()
+
+        if self.is_checkmate(self.controll_side):
+            print("CHECKMATE")
+
+    def call_next_turn_event(self):
+        """
+        Метод вызова события "следующий ход" для подписчиков события.
+        """
+        for handler in self.next_turn_handlers:
+            handler(self)
+
+    def inscrease_score_and_get_next_turn(self):
+        """
+        Передача хода другой стороне и увеличение счётчиков ходов.
+        """
+        if self.controll_side == Side.WHITE:
+            self.controll_side = Side.BLACK
+            self.move_number += 1
+        elif self.controll_side == Side.BLACK:
+            self.controll_side = Side.WHITE
+            self.half_move_number += 1
+        else:
+            self.controll_side = Side.WHITE
+
+    def restart(self) -> None:
+        """
+        Метод перезапуска шахматной партии. Уничтожение всех фигур на доске и инициализация новой доски.
+        """
+
+        self.destroy_all_figures()
+        self.initialize_bord()
+        self.next_turn()
+        pass
+
+    def start(self, is_call_next_turn=True) -> None:
+        """
+        Начало игры. Первый ход белых.
+
+        :param is_call_next_turn: Вызвать ли событие "следующий ход" (по умолчанию True). В случае, если False, событие не будет вызвано, но подпичсики события будут всеравно уведомлены.
+        """
+        if is_call_next_turn:
+            self.next_turn()
+        else:
+            self.call_next_turn_event()
+
+    def register_next_turn_handler(self, handler: Callable[["Chess"], None]) -> None:
+        """
+        Регистрация обработчика события "следующий ход".
+
+        :param handler: Обработчик события "следующий ход".
+        """
+        self.next_turn_handlers.append(handler)
+
+# NOTE: СЕКЦИЯ ДВИЖЕНИЯ ФИГУР
+
     def move_figure(self, figure: Figure, move_to: Move) -> None:
+        """
+        Метод для перемещения фигуры на указанную клетку. Перед перемещением проверяется возможность хода фигуры на указанную клетку.
+        """
         other = self.board[move_to.value[0]][move_to.value[1]]
 
         # NOTE: обработка взятия на проходе
@@ -235,11 +351,25 @@ class Chess:
         self.nullify_on_passant(figure)
         self.next_turn()
 
-        print(move_to.value, move_to.name)
+    def eating_figure(self, eating_figures: Figure, eaten_figure: Figure) -> None:
+        """
+        Метод для съедания фигуры. Перемещает фигуру на указанную клетку и уничтожает фигуру, которая находилась на этой клетке.
+
+        :param eating_figures: Фигура, которая совершает ход.
+        :param eaten_figure: Фигура, которая находится на клетке, на которую совершается ход.
+        """
+        self.board[eating_figures.position.value[0]
+                   ][eating_figures.position.value[1]] = None
+        self.board[eaten_figure.position.value[0]
+                   ][eaten_figure.position.value[1]] = eating_figures
+        eating_figures.set_new_position(eaten_figure.position)
+        eaten_figure.destroy()
 
     def castling(self, castling_type: CastlingType) -> None:
         """
         Метод для рокировки. Перемещает короля и ладью на соответствующие клетки. Метод безопасен только в том случае, если соблюдаются условия рокировки
+
+        :param castling_type: Тип рокировки.
         """
         match castling_type:
             case CastlingType.W_SHORT:
@@ -279,20 +409,11 @@ class Chess:
                 rook.set_new_position(Move(7, 3))
                 king.set_new_position(Move(7, 2))
 
-    def eating_figure(self, eating_figures: Figure, eaten_figure: Figure) -> None:
-        """
-        Метод для съедания фигуры. Перемещает фигуру на указанную клетку и уничтожает фигуру, которая находилась на этой клетке.
-        """
-        self.board[eating_figures.position.value[0]
-                   ][eating_figures.position.value[1]] = None
-        self.board[eaten_figure.position.value[0]
-                   ][eaten_figure.position.value[1]] = eating_figures
-        eating_figures.set_new_position(eaten_figure.position)
-        eaten_figure.destroy()
-
-    def eating_an_passant(self, figure: Figure, move_to: Move) -> None:
+    def eating_an_passant(self, figure: Pawn, move_to: Move) -> None:
         """
         Вспомогательный метод вызываем при обработке перемещения пешки. Не рекомендуется вызывать
+
+        :param figure: Пешка, которая совершает ход.
         """
 
         other_figure: Figure = None
@@ -325,144 +446,118 @@ class Chess:
         self.board[figure.position.value[0]
                    ][figure.position.value[1]] = new_figure
 
-    def nullify_on_passant(self, sender) -> None:
-        """
-        Отмена возможности взятия на проходе у всех пешек, кроме отправителя. Поскольку пешка, которая сделала ход на 2 клетки, может быть взята на проходе на следующем ходу.
-        Так же обновляем данные для строки FEN
-        """
-        is_there = False
-
-        for row in self.board:
-            for figure in row:
-                if figure != None and isinstance(figure, Pawn):
-                    if figure != sender:
-                        figure.is_enpassant = False
-                    elif figure.is_enpassant:  # Если отправитель имеет взятие на проходе
-                        is_there = True
-                        direction = -1 if figure.side == Side.WHITE else 1
-                        pawn_row, pawn_col = figure.position.value
-                        enpassant_move = Move((pawn_row + direction, pawn_col))
-
-        self.controll_enpassant = enpassant_move if is_there else Move.NULL
-
-        # if is_there and figure.is_enpassant:
-        #     if abs(figure.positions[-1].value[0] - figure.positions[-2].value[0]) == 2:
-        #         figure.is_enpassant = True
-        #         if figure.side == Side.WHITE:
-        #             self.controll_enpassant = Move(
-        #                 (figure.position.value[0] - 1, figure.position.value[1]))
-        #         else:
-        #             self.controll_enpassant = Move(
-        #                 (figure.position.value[0] + 1, figure.position.value[1]))
-        # else:
-        #     self.controll_enpassant = Move.NULL
-
-    def next_turn(self) -> None:
-        """
-        Передача хода другой стороне и увеличение счётч. Пересчет возможных ходов для каждой стороны для выявления запрещенных зон для короля.
-        """
-        self.calculate_attack_positions()
-        self.inscrease_score_and_get_next_turn()
-        self.call_next_turn_event()
-
-        print(self.get_fen())
-
-    def call_next_turn_event(self):
-        """
-        Метод вызова события "следующий ход" для подписчиков события.
-        """
-        for handler in self.next_turn_handlers:
-            handler(self)
-
-    def inscrease_score_and_get_next_turn(self):
-        """
-        Передача хода другой стороне и увеличение счётчиков ходов.
-        """
-        if self.controll_side == Side.WHITE:
-            self.controll_side = Side.BLACK
-            self.move_number += 1
-        elif self.controll_side == Side.BLACK:
-            self.controll_side = Side.WHITE
-            self.half_move_number += 1
-        else:
-            self.controll_side = Side.WHITE
-
-    def calculate_attack_positions(self) -> None:
-        self.white_attack_cells.clear()
-        self.black_attack_cells.clear()
-
-        for row in self.board:
-            for figure in row:
-                if figure is not None:
-                    if isinstance(figure, Pawn):
-                        pawn_attack_cells = figure.pawn_attacks(figure)
-                        if figure.side == Side.WHITE:
-                            self.white_attack_cells.update(pawn_attack_cells)
-                        else:
-                            self.black_attack_cells.update(pawn_attack_cells)
-                    else:
-                        possible_moves = figure.get_possible_moves(
-                            is_under_protection_figure=True)
-                        if figure.side == Side.WHITE:
-                            self.white_attack_cells.update(possible_moves)
-                        else:
-                            self.black_attack_cells.update(possible_moves)
-
     def is_cell_under_attack(self, move: Move, side: Side) -> bool:
         """
         Проверка находится ли клетка под атакой.
+
+        :param move: Клетка, которую необходимо проверить.
+        :param side: Сторона, которая пытается на клетку встать клетку.
         """
         if side == Side.WHITE:
             return move in self.black_attack_cells
         else:
             return move in self.white_attack_cells
 
-    def destroy_all_figures(self) -> None:
+    def calculate_attack_positions(self, board: list[list[Figure]], white_attack_cells: set, black_attack_cells: set) -> None:
         """
-        Уничтожение всех фигур на доске.
+        Вспомогательный метод вызываемый в начале хода. 
+        Метод для пересчета атакующих клеток для каждой стороны.
+
+        :param board: Доска, для которой необходимо пересчитать атакующие клетки.
+        :param white_attack_cells: Список клеток под атакой белой стороной.
+        :param black_attack_cells: Список клеток под атакой черной стороной.
+        """
+        white_attack_cells.clear()
+        black_attack_cells.clear()
+
+        for row in board:
+            for figure in row:
+                if figure is not None:
+                    figure.attacked_cells.clear()
+                    if isinstance(figure, Pawn):
+                        possible_moves = figure.pawn_attacks(figure)
+                        if figure.side == Side.WHITE:
+                            white_attack_cells.update(possible_moves)
+                        else:
+                            black_attack_cells.update(possible_moves)
+                    else:
+                        possible_moves = figure.get_possible_moves(
+                            is_under_protection_figure=True)
+                        if figure.side == Side.WHITE:
+                            white_attack_cells.update(possible_moves)
+                        else:
+                            black_attack_cells.update(possible_moves)
+                    figure.attacked_cells.update(possible_moves)
+
+    def get_path_between_positions(self, start: Move, end: Move) -> list[Move]:
+        """
+        Получение пути между двумя клетками (для линейных фигур).
+
+        :param start: Начальная клетка.
+        :param end: Конечная клетка.
+        """
+        path = []
+        start_row, start_col = start.value
+        end_row, end_col = end.value
+
+        row_step = (
+            end_row - start_row) // max(abs(end_row - start_row), 1)
+        col_step = (
+            end_col - start_col) // max(abs(end_col - start_col), 1)
+
+        current_row, current_col = start_row + row_step, start_col + col_step
+        while (current_row, current_col) != (end_row, end_col):
+            path.append(Move((current_row, current_col)))
+            current_row += row_step
+            current_col += col_step
+
+        return path
+
+# NOTE: СЕКЦИЯ ПОЛУЧЕНИЯ ВОЗМОЖНЫХ ХОДОВ
+
+    def update_possible_moves(self) -> None:
+        """
+        Вспомогательный метод вызываемый в начале хода. 
+        Обновление возможных ходов для всех фигур на доске.
         """
         for row in self.board:
             for figure in row:
                 if figure is not None:
-                    figure.destroy()
-
-    def restart(self) -> None:
-        """
-        Метод перезапуска шахматной партии. Уничтожение всех фигур на доске и инициализация новой доски.
-        """
-
-        self.destroy_all_figures()
-        self.initialize_bord()
-        self.next_turn()
-        pass
-
-    def start(self, is_call_next_turn=True) -> None:
-        """
-        Начало игры. Первый ход белых.
-
-        :param is_call_next_turn: Вызвать ли событие "следующий ход" (по умолчанию True). В случае, если False, событие не будет вызвано, но подпичсики события будут всеравно уведомлены.
-        """
-        if is_call_next_turn:
-            self.next_turn()
-        else:
-            self.call_next_turn_event()
+                    figure.possible_moves.clear()
+                    figure.possible_moves.update(figure.get_possible_moves())
 
     def get_figure_possible_moves(self, figure: Figure, is_under_protection_figure: bool = False) -> list[Move]:
+        """
+        Метод для получения возможных ходов для фигуры.
+        """
         match figure:
             case King():
-                return self.get_king_possible_moves(figure, is_under_protection_figure)
+                temp = self.get_king_possible_moves(
+                    figure, is_under_protection_figure)
             case Queen():
-                return self.get_queen_possible_moves(figure, is_under_protection_figure)
+                temp = self.get_queen_possible_moves(
+                    figure, is_under_protection_figure)
             case Rook():
-                return self.get_rook_possible_moves(figure, is_under_protection_figure)
+                temp = self.get_rook_possible_moves(
+                    figure, is_under_protection_figure)
             case Bishop():
-                return self.get_bishop_possible_moves(figure, is_under_protection_figure)
+                temp = self.get_bishop_possible_moves(
+                    figure, is_under_protection_figure)
             case Knight():
-                return self.get_knight_possible_moves(figure, is_under_protection_figure)
+                temp = self.get_knight_possible_moves(
+                    figure, is_under_protection_figure)
             case Pawn():
-                return self.get_pawn_possible_moves(figure, is_under_protection_figure)
+                temp = self.get_pawn_possible_moves(
+                    figure, is_under_protection_figure)
+            case _:
+                temp = []
+
+        return [move for move in temp if move in self.check_king["possible_moves"]]
 
     def get_king_possible_moves(self, figure: Figure, is_under_protection_figure: bool = False) -> list[Move]:
+        """
+        Метод для получения возможных ходов для короля.
+        """
         possible_moves = []
         row, col = figure.position.value
         directions = [
@@ -484,18 +579,18 @@ class Chess:
         # Добавление проверки на рокировку
         if is_under_protection_figure == False and figure.side == Side.WHITE and self.controll_castling in (Castling.WHITE, Castling.Both):
             # Короткая рокировка белых
-            if len(figure.positions) == 1 and self.board[0][7] and isinstance(self.board[0][7], Rook):
+            if len(figure.positions_list) == 1 and self.board[0][7] and isinstance(self.board[0][7], Rook):
                 rook = self.board[0][7]
-                if len(rook.positions) == 1 and all(self.board[0][c] is None for c in (5, 6)):
+                if len(rook.positions_list) == 1 and all(self.board[0][c] is None for c in (5, 6)):
                     # Проверяем, что клетки e1, f1, g1 не под атакой
                     if not any(cell in self.black_attack_cells for cell in (Move((0, 4)), Move((0, 5)), Move((0, 6)))):
                         # possible_moves.append(Move((7, 6)))
                         possible_moves.append(Move((0, 7)))
 
             # Длинная рокировка белых
-            if len(figure.positions) == 1 and self.board[0][0] and isinstance(self.board[0][0], Rook):
+            if len(figure.positions_list) == 1 and self.board[0][0] and isinstance(self.board[0][0], Rook):
                 rook = self.board[0][0]
-                if len(rook.positions) == 1 and all(self.board[0][c] is None for c in (1, 2, 3)):
+                if len(rook.positions_list) == 1 and all(self.board[0][c] is None for c in (1, 2, 3)):
                     # Проверяем, что клетки e1, d1, c1 не под атакой
                     if not any(cell in self.black_attack_cells for cell in (Move((0, 4)), Move((0, 3)), Move((0, 2)))):
                         # possible_moves.append(Move((7, 2)))
@@ -503,18 +598,18 @@ class Chess:
 
         if not is_under_protection_figure and figure.side == Side.BLACK and self.controll_castling in (Castling.BLACK, Castling.Both):
             # Короткая рокировка черных
-            if len(figure.positions) == 1 and self.board[7][7] and isinstance(self.board[7][7], Rook):
+            if len(figure.positions_list) == 1 and self.board[7][7] and isinstance(self.board[7][7], Rook):
                 rook = self.board[7][7]
-                if len(rook.positions) == 1 and all(self.board[7][c] is None for c in (5, 6)):
+                if len(rook.positions_list) == 1 and all(self.board[7][c] is None for c in (5, 6)):
                     # Проверяем, что клетки e8, f8, g8 не под атакой
                     if not any(cell in self.white_attack_cells for cell in (Move((7, 4)), Move((7, 5)), Move((7, 6)))):
                         # possible_moves.append(Move((0, 6)))
                         possible_moves.append(Move((7, 7)))
 
             # Длинная рокировка черных
-            if len(figure.positions) == 1 and self.board[7][0] and isinstance(self.board[7][0], Rook):
+            if len(figure.positions_list) == 1 and self.board[7][0] and isinstance(self.board[7][0], Rook):
                 rook = self.board[7][0]
-                if len(rook.positions) == 1 and all(self.board[7][c] is None for c in (1, 2, 3)):
+                if len(rook.positions_list) == 1 and all(self.board[7][c] is None for c in (1, 2, 3)):
                     # Проверяем, что клетки e8, d8, c8 не под атакой
                     if not any(cell in self.white_attack_cells for cell in (Move((7, 4)), Move((7, 3)), Move((7, 2)))):
                         # possible_moves.append(Move((0, 2)))
@@ -523,6 +618,9 @@ class Chess:
         return possible_moves
 
     def get_queen_possible_moves(self, figure: Figure, is_under_protection_figure: bool = False) -> list[Move]:
+        """
+        Метод для получения возможных ходов для ферзя.
+        """
         possible_moves = []
         row, col = figure.position.value
         self.traverse_direction(figure,
@@ -545,6 +643,9 @@ class Chess:
         return possible_moves
 
     def get_rook_possible_moves(self, figure: Figure, is_under_protection_figure: bool = False) -> list[Move]:
+        """
+        Метод для получения возможных ходов для ладьи.
+        """
         possible_moves = []
         row, col = figure.position.value
         # NOTE: Обход вертикали и горизонтали
@@ -560,6 +661,9 @@ class Chess:
         return possible_moves
 
     def get_bishop_possible_moves(self, figure: Figure, is_under_protection_figure: bool = False) -> list[Move]:
+        """
+        Метод для получения возможных ходов для слона.
+        """
         possible_moves = []
         row, col = figure.position.value
 
@@ -613,6 +717,9 @@ class Chess:
             c += dc
 
     def get_knight_possible_moves(self, figure: Figure, is_under_protection_figure: bool = False) -> list[Move]:
+        """
+        Метод для получения возможных ходов для коня.
+        """
         possible_moves = []
         row, col = figure.position.value
 
@@ -641,6 +748,9 @@ class Chess:
         return possible_moves
 
     def get_pawn_possible_moves(self, figure: Figure, is_under_protection_figure: bool = False) -> list[Move]:
+        """
+        Метод для получения возможных ходов для пешки.
+        """
         possible_moves = []
         row, col = figure.position.value
         if isinstance(figure, Pawn):
@@ -692,3 +802,159 @@ class Chess:
                     possible_moves.append(Move((diag_row, diag_col)))
 
         return possible_moves
+
+# NOTE: СЕКЦИЯ ШАХА
+
+    def check(self):
+        result = self.is_king_in_check(
+            self.board, self.controll_side, self.white_attack_cells, self.black_attack_cells)
+
+        self.check_king["is_check"] = result[0]
+        self.check_king["attacking_figure"] = result[1]
+        self.check_king["possible_moves"] = self.refresh_possible_moves_kingcheck()
+
+    def is_king_in_check(self, board: list[list[Figure]], side: Side, white_attack_cells: set[Move], black_attack_cells: set[Move]) -> tuple[bool, list[Figure]]:
+        """
+        Проверка на наличие шаха для короля.
+        """
+        is_check = False
+        attack_cells = black_attack_cells if side == Side.WHITE else white_attack_cells
+        for cell in attack_cells:
+            cell_figure = board[cell.value[0]][cell.value[1]]
+            if isinstance(cell_figure, King) and cell_figure.side == self.controll_side:
+                is_check = True
+
+                attacked_figure = []
+                for row in self.board:
+                    for figure in row:
+                        if figure is not None and figure.side != side:
+                            if cell in figure.attacked_cells:
+                                attacked_figure.append(figure)
+
+                return (is_check, attacked_figure)
+        return (is_check, [])
+
+    def is_kingcheck_after_move(self, figure: Figure, move_to: Move) -> bool:
+        """
+        Проверка на наличие шаха для короля после хода фигуры.
+        """
+        temp_board = self.board.copy()
+
+        old_position = figure.position
+        old_figure = temp_board[move_to.value[0]][move_to.value[1]]
+
+        temp_board[move_to.value[0]][move_to.value[1]] = figure
+        temp_board[old_position.value[0]][old_position.value[1]] = None
+
+        white_attack_cells: set[Move] = set()
+        black_attack_cells: set[Move] = set()
+
+        self.calculate_attack_positions(
+            temp_board, white_attack_cells, black_attack_cells)
+        is_check = self.is_king_in_check(
+            temp_board, figure.side, white_attack_cells, black_attack_cells)
+
+        temp_board[old_position.value[0]][old_position.value[1]] = figure
+        temp_board[move_to.value[0]][move_to.value[1]] = old_figure
+
+        return is_check[0]
+
+    def refresh_possible_moves_kingcheck(self) -> list[Move]:
+        """
+        Вспомогательный метод. Получение всех возможных ходов для фигур текущей стороны, если король под шахом.
+        """
+        possible_moves = []
+
+        if not self.check_king["is_check"]:
+            row_num = 0
+            col_num = 0
+            for row in self.board:
+                for col in row:
+                    possible_moves.append(Move(row_num, col_num))
+                    col_num += 1
+                row_num += 1
+                col_num = 0
+            return possible_moves
+
+        # Позиция короля
+        king: King = self.get_king(self.controll_side)
+
+        # Клетки, атакуемые атакующими фигурами
+        attacked_cells = set()
+        for attacker in self.check_king["attacking_figure"]:
+            attacked_cells.update(attacker.attacked_cells)
+
+        king_moves = self.get_king_possible_moves(king)
+        # Если шах объявлен одной фигурой
+        if len(self.check_king["attacking_figure"]) == 1:
+            attacker: Figure = self.check_king["attacking_figure"][0]
+
+            # 1. Король может попытаться уйти
+            for move in king_moves:
+                if move not in attacked_cells:  # Безопасная клетка
+                    possible_moves.append(move)
+
+            # 2. Фигуры могут захватить атакующую фигуру
+            possible_moves.append(attacker.position)
+
+            # 3. Фигуры могут блокировать шах (только для линейных фигур)
+            if attacker.figure_type in {Figure_type.b_bishop, Figure_type.w_bishop, Figure_type.b_rook, Figure_type.w_rook, Figure_type.b_queen, Figure_type.w_queen}:
+                path_to_king = self.get_path_between_positions(
+                    attacker.position, king.position)
+                possible_moves.extend(path_to_king)
+
+        # Если шах объявлен двумя фигурами, только король может уйти
+        elif len(self.check_king["attacking_figure"]) > 1:
+            for move in king_moves:
+                if move not in attacked_cells:  # Безопасная клетка
+                    possible_moves.append(move)
+
+        return possible_moves
+
+    def get_king(self, side: Side) -> King:
+        """
+        Метод для получения короля по цвету.
+        """
+        for row in self.board:
+            for figure in row:
+                if figure and isinstance(figure, King) and figure.side == side:
+                    return figure
+        return None
+
+    def is_checkmate(self, side: Side) -> bool:
+        """
+        Проверяет, что ни одна фигура игрока не может сделать ход из списка check_king["possible_moves"].
+        Отрезает возможность короля передвигаться по клетка находящиеся под атакой. Если король не может сделать ход, то это мат.
+
+        :param side: Цвет игрока.
+        :return: True, если ни одна фигура не может сделать ход из check_king["possible_moves"], иначе False.
+        """
+        check_possible_moves: list[Move] = self.check_king["possible_moves"].copy(
+        )
+
+        found_matches = []
+        for row in self.board:
+            for figure in row:
+                if figure and figure.side == side:
+                    # Найти пересечение возможных ходов фигуры с check_king["possible_moves"]
+                    matching_moves = [
+                        move for move in figure.possible_moves if move in check_possible_moves]
+                    if matching_moves:
+                        found_matches.append(
+                            (figure, figure.position, matching_moves))
+
+        # Вывод фигур с совпадениями
+        for figure, position, matches in found_matches:
+            print(f"Figure: {figure}, Position: {
+                  position}, Matching Moves: {matches}")
+
+        if len(found_matches) == 1 and isinstance(found_matches[0][0], King):
+            for move in found_matches[0][2]:
+                if self.is_cell_under_attack(move, self.controll_side):
+                    found_matches[0][2].remove(move)
+
+            # Если был найден только король, но у него нет возможных ходов, то это мат
+            return len(found_matches[0][2]) == 0
+
+        # Если есть совпадения, то это не мат
+        return len(found_matches) == 0

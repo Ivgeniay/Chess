@@ -32,7 +32,7 @@ class Pawn(Figure):
         return attack_cells
 
     def last_action(self) -> None:
-        if self.can_enpassant and abs(self.positions[-1].value[0] - self.positions[-2].value[0]) == 2:
+        if self.can_enpassant and abs(self.positions_list[-1].value[0] - self.positions_list[-2].value[0]) == 2:
             self.is_enpassant = True
         self.can_enpassant = False
 
@@ -42,5 +42,9 @@ class Pawn(Figure):
         if self.is_own_cell(move) or self.is_not_own_move() or self.is_frendly_cell(move):
             return False
 
+        if self.chess.is_kingcheck_after_move(self, move):
+            return False
+
         possible_moves = self.get_possible_moves()
+
         return move in possible_moves

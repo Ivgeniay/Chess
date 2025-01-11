@@ -1,4 +1,4 @@
-from game.input import Input
+from game.services.input import Input
 from game.ui.uielement import UiElement
 from game.settings import *
 
@@ -8,8 +8,8 @@ import pygame as pg
 
 class Button(UiElement):
 
-    def __init__(self, x: int, y: int, width: int, height: int, input: Input, image_path: str = None, text: str = "", action: Callable[[UiElement], None] = None, hover_image_path: str = None, sound_path: str = None, font: pg.font.Font = None, text_color: tuple[int, int, int] = BLACK):
-        super().__init__(x, y, width, height, input, font, text)
+    def __init__(self, x: int, y: int, width: int, height: int, image_path: str = None, text: str = "", action: Callable[[UiElement], None] = None, hover_image_path: str = None, sound_path: str = None, font: pg.font.Font = None, text_color: tuple[int, int, int] = BLACK, surface: pg.Surface = None):
+        super().__init__(x, y, width, height, font, text, surface)
         self.text: str = text
         self.text_color: tuple[int, int, int] = text_color
 
@@ -52,6 +52,7 @@ class Button(UiElement):
             center=(self.rect.centerx, self.rect.centery))
 
     def draw(self, surface):
+        super().draw(surface)
         surface.blit(self.current_image, self.rect)
         surface.blit(self.text_surface, self.text_rect)
 

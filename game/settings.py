@@ -1,3 +1,6 @@
+# NOTE: GENERAL
+RELEASE = False
+
 # NOTE: screen settings
 WIDTH = 800
 HEIGHT = 800
