@@ -1,7 +1,6 @@
-from game.entities.abstract.Entity import Entity
-import pygame as pg
+# from abc import ABC, abstractmethod
 
 
-class IDrawable(Entity):
-    def draw(self, surface: pg.Surface):
+class IDrawable(metaclass=type):
+    def draw(self, surface):
         pass

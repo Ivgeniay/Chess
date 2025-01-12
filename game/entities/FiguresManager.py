@@ -1,9 +1,11 @@
+from game.services.resourse_service import ResourcesService
 from game.entities.abstract.ISurfaceble import ISurfaceble
 from game.entities.abstract.IUpdatable import IUpdatable
+from game.services.service_locator import ServiceLocator
 from game.entities.abstract.IDrawable import IDrawable
 from game.entities.board import Board
 from game.services.input import Input
-from game.services.service_locator import ServiceLocator
+from lib.figure_type import Figure_type
 from lib.move import Move
 from lib.figure import Figure
 from game.settings import *
@@ -13,60 +15,60 @@ import pygame as pg
 class FigureDisplayManager(IDrawable, IUpdatable, ISurfaceble):
     from lib.chess import Chess
 
-    # def __init__(self, chess: Chess, board: Board, input: Input, surface: pg.Surface) -> None:
     def __init__(self, surface: pg.Surface) -> None:
         from lib.chess import Chess
-        self.chess = ServiceLocator.get(Chess)
-        self.figures = self.chess.get_figure_list()
-        self.board = ServiceLocator.get(Board)
-        self.input = ServiceLocator.get(Input)
-        self._surface = surface
+        self.chess: Chess = ServiceLocator.get(Chess)
+        self.board: Board = ServiceLocator.get(Board)
+        self.figures: list[Figure] = self.chess.get_figure_list()
+        self.input: Input = ServiceLocator.get(Input)
+        self._surface: pg.Surface = surface
 
         self.download_sprites()
         self.initialize_figures()
 
         self.dragging_object: Figure = None
 
-        # self.input.mouse_left_down_register(self.start_dragging)
-        # self.input.mouse_left_up_register(self.stop_dragging)
-        self.input.mouse_left_down_register_ui(self, self.start_dragging)
-        self.input.mouse_left_up_register_ui(self, self.stop_dragging)
+        self.input.mouse_left_down_register(self, self.start_dragging)
+        self.input.mouse_left_up_register(self, self.stop_dragging)
 
     @property
     def surface(self) -> pg.Surface:
         return self._surface
 
-    def restart(self):
+    def restart(self) -> None:
         self.recall_figures(self.chess)
 
     def download_sprites(self) -> None:
         """
         Вспомогательный метод для загрузки спрайтов фигур.
         """
-        self.w_pawn_pic = pg.image.load(
-            "game/resources/sprites/white_pawn.png").convert_alpha()
-        self.b_pawn_pic = pg.image.load(
-            "game/resources/sprites/black_pawn.png").convert_alpha()
-        self.w_bigshop_pic = pg.image.load(
-            "game/resources/sprites/white_bishop.png").convert_alpha()
-        self.b_bigshop_pic = pg.image.load(
-            "game/resources/sprites/black_bishop.png").convert_alpha()
-        self.w_knight_pic = pg.image.load(
-            "game/resources/sprites/white_knight.png").convert_alpha()
-        self.b_knight_pic = pg.image.load(
-            "game/resources/sprites/black_knight.png").convert_alpha()
-        self.w_rook_pic = pg.image.load(
-            "game/resources/sprites/white_rook.png").convert_alpha()
-        self.b_rook_pic = pg.image.load(
-            "game/resources/sprites/black_rook.png").convert_alpha()
-        self.w_queen_pic = pg.image.load(
-            "game/resources/sprites/white_queen.png").convert_alpha()
-        self.b_queen_pic = pg.image.load(
-            "game/resources/sprites/black_queen.png").convert_alpha()
-        self.w_king_pic = pg.image.load(
-            "game/resources/sprites/white_king.png").convert_alpha()
-        self.b_king_pic = pg.image.load(
-            "game/resources/sprites/black_king.png").convert_alpha()
+        resourcesService: ResourcesService = ServiceLocator.get(
+            ResourcesService)
+
+        self.w_pawn_pic = resourcesService.get_resource(
+            Figure_type.w_pawn.name)
+        self.b_pawn_pic = resourcesService.get_resource(
+            Figure_type.b_pawn.name)
+        self.w_bigshop_pic = resourcesService.get_resource(
+            Figure_type.w_bishop.name)
+        self.b_bigshop_pic = resourcesService.get_resource(
+            Figure_type.b_bishop.name)
+        self.w_knight_pic = resourcesService.get_resource(
+            Figure_type.w_knight.name)
+        self.b_knight_pic = resourcesService.get_resource(
+            Figure_type.b_knight.name)
+        self.w_rook_pic = resourcesService.get_resource(
+            Figure_type.w_rook.name)
+        self.b_rook_pic = resourcesService.get_resource(
+            Figure_type.b_rook.name)
+        self.w_queen_pic = resourcesService.get_resource(
+            Figure_type.w_queen.name)
+        self.b_queen_pic = resourcesService.get_resource(
+            Figure_type.b_queen.name)
+        self.w_king_pic = resourcesService.get_resource(
+            Figure_type.w_king.name)
+        self.b_king_pic = resourcesService.get_resource(
+            Figure_type.b_king.name)
 
     def initialize_figures(self) -> None:
         """
@@ -157,7 +159,8 @@ class FigureDisplayManager(IDrawable, IUpdatable, ISurfaceble):
             if new_pos:
                 if self.dragging_object.is_possible_move(new_pos):
 
-                    pos = self.board.get_cell_info_by_move(new_pos)
+                    pos: tuple[int, int, int,
+                               int] = self.board.get_cell_info_by_move(new_pos)
                     self.dragging_object.rect = (pos[0], pos[1])
                     self.chess.move_figure(self.dragging_object, new_pos)
                 else:

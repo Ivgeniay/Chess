@@ -20,3 +20,9 @@ class TextUI(UiElement):
         self.text_surface = self.font.render(text, True, WHITE)
         self.text_rect = self.text_surface.get_rect(
             center=(self.rect.centerx, self.rect.centery))
+
+    def on_hover(self, value: bool):
+        pass
+
+    def on_click(self):
+        pass

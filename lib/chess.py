@@ -38,14 +38,15 @@ start_position: list[list[Figure_type]] = [
      Figure_type.b_king, Figure_type.b_bishop, Figure_type.b_knight, Figure_type.b_rook],
 ]
 
-# TODO: Добавить превращение пешки
+
 # TODO: Добавить пат - когда нет ходов у игрока, но check не стоит
-
-
 class Chess:
     def __init__(self) -> None:
         self.fabric = FigureFabric(self)
         self.next_turn_handlers: list[Callable[[Chess], None]] = []
+        self.checkmate_handlers: list[Callable[[Side], None]] = []
+        self.stalemate_handlers: list[Callable[[None], None]] = []
+        self.switch_pawn_handlers: list[Callable[[Pawn], None]] = []
         self.check_king = {
             "is_check": False,
             "possible_moves": [],
@@ -54,11 +55,11 @@ class Chess:
         self.moves: list[MoveModel] = []
         self.initialize_bord()
 
-# NOTE: СЕКЦИЯ ДЛЯ РАБЫ С ИГРОВОЙ ДОСКОЙ
+# NOTE: СЕКЦИЯ ДЛЯ РАБОТЫ С ИГРОВОЙ ДОСКОЙ
 
     def initialize_bord(self) -> None:
         """
-        Метод инициализации доски. Создаётся двумерный массив, содержащий фигуры в начальном положении. 
+        Метод инициализации доски. Создаётся двумерный массив, содержащий фигуры в начальном положении.
         Не должен вызываться напрямую
         """
         # NOTE: Список клеток под атакой белой стороны
@@ -93,7 +94,7 @@ class Chess:
         }
         self.check_king["possible_moves"] = self.refresh_possible_moves_kingcheck()
 
-    def get_figure_list(self):
+    def get_figure_list(self) -> list[Figure]:
         """
         Получение списка всех фигур на доске.
         """
@@ -265,15 +266,11 @@ class Chess:
 
         if self.is_checkmate(self.controll_side):
             print("CHECKMATE")
+            self.call_checkmate_event(self.controll_side)
 
-    def call_next_turn_event(self):
-        """
-        Метод вызова события "следующий ход" для подписчиков события.
-        """
-        for handler in self.next_turn_handlers:
-            handler(self)
+        print(self.get_fen())
 
-    def inscrease_score_and_get_next_turn(self):
+    def inscrease_score_and_get_next_turn(self) -> None:
         """
         Передача хода другой стороне и увеличение счётчиков ходов.
         """
@@ -307,6 +304,8 @@ class Chess:
         else:
             self.call_next_turn_event()
 
+# NOTE: СЕКЦИЯ СОБЫТИЙ
+
     def register_next_turn_handler(self, handler: Callable[["Chess"], None]) -> None:
         """
         Регистрация обработчика события "следующий ход".
@@ -315,13 +314,69 @@ class Chess:
         """
         self.next_turn_handlers.append(handler)
 
+    def call_next_turn_event(self) -> None:
+        """
+        Метод вызова события "следующий ход" для подписчиков события.
+        """
+        for handler in self.next_turn_handlers:
+            handler(self)
+
+    def register_checkmate_handler(self, handler: Callable[[Side], None]) -> None:
+        """
+        Регистрация обработчика события "мат".
+
+        :param handler: Обработчик события "мат".
+        """
+        self.checkmate_handlers.append(handler)
+
+    def call_checkmate_event(self, side: Side) -> None:
+        """
+        Метод вызова события "мат" для подписчиков события.
+
+        :param side: Сторона, которая проиграла.
+        """
+        for handler in self.checkmate_handlers:
+            handler(side)
+
+    def register_stalemate_handler(self, handler: Callable[[None], None]) -> None:
+        """
+        Регистрация обработчика события "пат".
+
+        :param handler: Обработчик события "пат".
+        """
+        self.stalemate_handlers.append(handler)
+
+    def call_stalemate_event(self) -> None:
+        """
+        Метод вызова события "пат" для подписчиков события.
+        """
+        for handler in self.stalemate_handlers:
+            handler()
+
+    def register_switch_pawn_handler(self, handler: Callable[[Pawn], None]) -> None:
+        """
+        Регистрация обработчика события "превращение пешки".
+
+        :param handler: Обработчик события "превращение пешки".
+        """
+        self.switch_pawn_handlers.append(handler)
+
+    def call_switch_pawn_event(self, pawn: Pawn) -> None:
+        """
+        Метод вызова события "превращение пешки" для подписчиков события.
+
+        :param pawn: Пешка, которую необходимо превратить.
+        """
+        for handler in self.switch_pawn_handlers:
+            handler(pawn)
+
 # NOTE: СЕКЦИЯ ДВИЖЕНИЯ ФИГУР
 
     def move_figure(self, figure: Figure, move_to: Move) -> None:
         """
         Метод для перемещения фигуры на указанную клетку. Перед перемещением проверяется возможность хода фигуры на указанную клетку.
         """
-        other = self.board[move_to.value[0]][move_to.value[1]]
+        other: Figure = self.board[move_to.value[0]][move_to.value[1]]
 
         # NOTE: обработка взятия на проходе
         if isinstance(figure, Pawn) and other == None and figure.position.value[1] != move_to.value[1]:
@@ -329,7 +384,7 @@ class Chess:
 
         # NOTE: обработки ракировки
         elif isinstance(figure, King) and isinstance(other, Rook) and figure.side == other.side:
-            delta = abs(move_to.value[1] - figure.position.value[1])
+            delta: int = abs(move_to.value[1] - figure.position.value[1])
             match figure.side:
                 case Side.WHITE:
                     self.castling(CastlingType.W_SHORT) if delta == 3 else self.castling(
@@ -346,6 +401,10 @@ class Chess:
                 self.board[move_to.value[0]][move_to.value[1]] = figure
                 self.board[old_position.value[0]][old_position.value[1]] = None
                 figure.set_new_position(move_to)
+
+        if isinstance(figure, Pawn):
+            if self.is_pawn_at_end(figure):
+                self.call_switch_pawn_event(figure)
 
         figure.last_action()
         self.nullify_on_passant(figure)
@@ -373,8 +432,8 @@ class Chess:
         """
         match castling_type:
             case CastlingType.W_SHORT:
-                rook = self.board[0][7]
-                king = self.board[0][4]
+                rook: Figure = self.board[0][7]
+                king: Figure = self.board[0][4]
                 self.board[0][5] = rook
                 self.board[0][6] = king
                 self.board[0][4] = None
@@ -436,10 +495,17 @@ class Chess:
                    ][self_old_position.value[1]] = None
         figure.set_new_position(move_to)
 
-    def switch_pawn(self, figure: Pawn, figure_type: Figure_type) -> None:
+    def switch_pawn(self, figure_type: Figure_type) -> None:
         """
         Метод для превращения пешки в другую фигуру.
         """
+        figure: Pawn = None
+        for row in [self.board[0], self.board[-1]]:
+            for _figure in row:
+                if isinstance(_figure, Pawn):
+                    figure = _figure
+                    break
+
         new_figure = self.fabric.create_figure(
             figure_type, figure.position)
         figure.destroy()
@@ -513,6 +579,20 @@ class Chess:
 
         return path
 
+    def is_pawn_at_end(self, pawn: Pawn) -> bool:
+        """
+        Проверяет, дошла ли пешка до конца доски.
+
+        :param pawn: Пешка, которую проверяем.
+        :return: True, если пешка достигла конца доски, иначе False.
+        """
+        if pawn.side == Side.WHITE:
+            return pawn.position.value[0] == 7
+        elif pawn.side == Side.BLACK:
+            return pawn.position.value[0] == 0
+
+        return False
+
 # NOTE: СЕКЦИЯ ПОЛУЧЕНИЯ ВОЗМОЖНЫХ ХОДОВ
 
     def update_possible_moves(self) -> None:
@@ -558,6 +638,8 @@ class Chess:
         """
         Метод для получения возможных ходов для короля.
         """
+        if figure is None:
+            return []
         possible_moves = []
         row, col = figure.position.value
         directions = [
@@ -576,7 +658,7 @@ class Chess:
                 if other_figure is None or other_figure.side != figure.side:
                     possible_moves.append(move_key)
 
-        # Добавление проверки на рокировку
+        # NOTE: Добавление проверки на рокировку
         if is_under_protection_figure == False and figure.side == Side.WHITE and self.controll_castling in (Castling.WHITE, Castling.Both):
             # Короткая рокировка белых
             if len(figure.positions_list) == 1 and self.board[0][7] and isinstance(self.board[0][7], Rook):
@@ -597,22 +679,20 @@ class Chess:
                         possible_moves.append(Move((0, 0)))
 
         if not is_under_protection_figure and figure.side == Side.BLACK and self.controll_castling in (Castling.BLACK, Castling.Both):
-            # Короткая рокировка черных
+            # NOTE: Короткая рокировка черных
             if len(figure.positions_list) == 1 and self.board[7][7] and isinstance(self.board[7][7], Rook):
                 rook = self.board[7][7]
                 if len(rook.positions_list) == 1 and all(self.board[7][c] is None for c in (5, 6)):
                     # Проверяем, что клетки e8, f8, g8 не под атакой
                     if not any(cell in self.white_attack_cells for cell in (Move((7, 4)), Move((7, 5)), Move((7, 6)))):
-                        # possible_moves.append(Move((0, 6)))
                         possible_moves.append(Move((7, 7)))
 
-            # Длинная рокировка черных
+            # NOTE: Длинная рокировка черных
             if len(figure.positions_list) == 1 and self.board[7][0] and isinstance(self.board[7][0], Rook):
-                rook = self.board[7][0]
+                rook: Rook = self.board[7][0]
                 if len(rook.positions_list) == 1 and all(self.board[7][c] is None for c in (1, 2, 3)):
-                    # Проверяем, что клетки e8, d8, c8 не под атакой
+                    # NOTE: Проверяем, что клетки e8, d8, c8 не под атакой
                     if not any(cell in self.white_attack_cells for cell in (Move((7, 4)), Move((7, 3)), Move((7, 2)))):
-                        # possible_moves.append(Move((0, 2)))
                         possible_moves.append(Move((7, 0)))
 
         return possible_moves
@@ -878,13 +958,15 @@ class Chess:
 
         # Позиция короля
         king: King = self.get_king(self.controll_side)
+        if king is None:
+            return possible_moves
 
         # Клетки, атакуемые атакующими фигурами
         attacked_cells = set()
         for attacker in self.check_king["attacking_figure"]:
             attacked_cells.update(attacker.attacked_cells)
 
-        king_moves = self.get_king_possible_moves(king)
+        king_moves: list[Move] = self.get_king_possible_moves(king)
         # Если шах объявлен одной фигурой
         if len(self.check_king["attacking_figure"]) == 1:
             attacker: Figure = self.check_king["attacking_figure"][0]
@@ -899,7 +981,7 @@ class Chess:
 
             # 3. Фигуры могут блокировать шах (только для линейных фигур)
             if attacker.figure_type in {Figure_type.b_bishop, Figure_type.w_bishop, Figure_type.b_rook, Figure_type.w_rook, Figure_type.b_queen, Figure_type.w_queen}:
-                path_to_king = self.get_path_between_positions(
+                path_to_king: list[Move] = self.get_path_between_positions(
                     attacker.position, king.position)
                 possible_moves.extend(path_to_king)
 
