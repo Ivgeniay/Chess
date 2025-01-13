@@ -11,11 +11,9 @@ class King(Figure):
 
     def is_possible_move(self, move: Move) -> bool:
         # NOTE: Общие проверки
-        if self.is_own_cell(move) or self.is_not_own_move():
+        if self.is_own_cell(move) or self.is_not_own_move() or self.chess.is_stop_figure_moving:
             return False
 
-        # if self.is_frendly_cell(move)
-        #     return False
         other = self.chess.board[move.value[0]][move.value[1]]
         if other != None and other.side == self.side and isinstance(other, Rook):
             pass

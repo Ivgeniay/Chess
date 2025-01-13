@@ -4,7 +4,7 @@ class ServiceLocator:
     _services = {}
 
     @classmethod
-    def register(cls, service_type: type, instance: object) -> None:
+    def register(cls, service_type: type, instance: object) -> object:
         """
         Регистрирует сервис в локаторе.
 
@@ -14,6 +14,7 @@ class ServiceLocator:
         if service_type in cls._services:
             raise ValueError(f"Сервис {service_type} уже зарегистрирован.")
         cls._services[service_type] = instance
+        return instance
 
     @classmethod
     def get(cls, service_type: type) -> object:

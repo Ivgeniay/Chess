@@ -39,7 +39,7 @@ class Pawn(Figure):
     # TODO: доделать возможность превращения пешки
     def is_possible_move(self, move: Move) -> bool:
         # NOTE: Общие проверки
-        if self.is_own_cell(move) or self.is_not_own_move() or self.is_frendly_cell(move):
+        if self.is_own_cell(move) or self.is_not_own_move() or self.is_frendly_cell(move) or self.chess.is_stop_figure_moving:
             return False
 
         if self.chess.is_kingcheck_after_move(self, move):

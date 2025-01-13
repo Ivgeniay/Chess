@@ -1,3 +1,4 @@
+from email import message
 from itertools import chain
 from typing import Callable
 
@@ -38,8 +39,9 @@ start_position: list[list[Figure_type]] = [
      Figure_type.b_king, Figure_type.b_bishop, Figure_type.b_knight, Figure_type.b_rook],
 ]
 
+# TODO: переделать next. Сперва сделать проверку на шах, потом на пат, постепенно уменьшая количество проверок и возможных ходов фигуры
 
-# TODO: Добавить пат - когда нет ходов у игрока, но check не стоит
+
 class Chess:
     def __init__(self) -> None:
         self.fabric = FigureFabric(self)
@@ -47,13 +49,19 @@ class Chess:
         self.checkmate_handlers: list[Callable[[Side], None]] = []
         self.stalemate_handlers: list[Callable[[None], None]] = []
         self.switch_pawn_handlers: list[Callable[[Pawn], None]] = []
+        self.chess_message_handlers: list[Callable[[str], None]] = []
         self.check_king = {
             "is_check": False,
             "possible_moves": [],
             "attacking_figure": []
         }
         self.moves: list[MoveModel] = []
+        self._stop_figure_moving: bool = False
         self.initialize_bord()
+
+    @property
+    def is_stop_figure_moving(self) -> bool:
+        return self._stop_figure_moving
 
 # NOTE: СЕКЦИЯ ДЛЯ РАБОТЫ С ИГРОВОЙ ДОСКОЙ
 
@@ -83,7 +91,6 @@ class Chess:
         self.move_number = 0
         # NOTE: black side move
         self.half_move_number = 0
-        # self.calculate_attack_positions(self.board, self.white_attack_cells, self.black_attack_cells)
         self.fen = {
             "board": self.position_to_fen(),
             "side": Side.NONE,
@@ -257,6 +264,8 @@ class Chess:
         """
         Передача хода другой стороне и увеличение счётч. Пересчет возможных ходов для каждой стороны для выявления запрещенных зон для короля.
         """
+        message: str = ""
+
         self.calculate_attack_positions(
             self.board, self.white_attack_cells, self.black_attack_cells)
         self.update_possible_moves()
@@ -264,11 +273,18 @@ class Chess:
         self.call_next_turn_event()
         self.check()
 
-        if self.is_checkmate(self.controll_side):
-            print("CHECKMATE")
+        if self.check_king["is_check"]:
+            message: str = "CHECK"
+        if self.check_king["is_check"] and self.is_checkmate(self.controll_side):
             self.call_checkmate_event(self.controll_side)
+            message: str = "CHECKMATE"
+        else:
+            if self.is_stalemate():
+                self.call_stalemate_event()
+                message: str = "STALEMATE"
 
         print(self.get_fen())
+        self.call_chess_message_event(message)
 
     def inscrease_score_and_get_next_turn(self) -> None:
         """
@@ -370,6 +386,23 @@ class Chess:
         for handler in self.switch_pawn_handlers:
             handler(pawn)
 
+    def register_chess_message_handler(self, handler: Callable[[str], None]) -> None:
+        """
+        Регистрация обработчика события "сообщение".
+
+        :param handler: Обработчик события "сообщение".
+        """
+        self.chess_message_handlers.append(handler)
+
+    def call_chess_message_event(self, message: str) -> None:
+        """
+        Метод вызова события "сообщение" для подписчиков события.
+
+        :param message: Сообщение, которое необходимо передать.
+        """
+        for handler in self.chess_message_handlers:
+            handler(message)
+
 # NOTE: СЕКЦИЯ ДВИЖЕНИЯ ФИГУР
 
     def move_figure(self, figure: Figure, move_to: Move) -> None:
@@ -404,6 +437,7 @@ class Chess:
 
         if isinstance(figure, Pawn):
             if self.is_pawn_at_end(figure):
+                self._stop_figure_moving = True
                 self.call_switch_pawn_event(figure)
 
         figure.last_action()
@@ -480,10 +514,8 @@ class Chess:
         self_old_position = figure.position
         if figure.side == Side.WHITE:
             other_position = Move(move_to.value[0] - 1, move_to.value[1])
-            # other_figure = self.board[move_to.value[0] - 1][move_to.value[1]]
         if figure.side == Side.BLACK:
             other_position = Move(move_to.value[0] + 1, move_to.value[1])
-            # other_figure = self.board[move_to.value[0] + 1][move_to.value[1]]
 
         other_figure = self.board[other_position.value[0]
                                   ][other_position.value[1]]
@@ -506,11 +538,12 @@ class Chess:
                     figure = _figure
                     break
 
-        new_figure = self.fabric.create_figure(
+        new_figure: Figure | None = self.fabric.create_figure(
             figure_type, figure.position)
         figure.destroy()
         self.board[figure.position.value[0]
                    ][figure.position.value[1]] = new_figure
+        self._stop_figure_moving = False
 
     def is_cell_under_attack(self, move: Move, side: Side) -> bool:
         """
@@ -612,7 +645,7 @@ class Chess:
         """
         match figure:
             case King():
-                temp = self.get_king_possible_moves(
+                temp: list[Move] = self.get_king_possible_moves(
                     figure, is_under_protection_figure)
             case Queen():
                 temp = self.get_queen_possible_moves(
@@ -642,7 +675,7 @@ class Chess:
             return []
         possible_moves = []
         row, col = figure.position.value
-        directions = [
+        directions: list[tuple[int, int]] = [
             (-1, -1), (-1, 0), (-1, 1),
             (0, -1),          (0, 1),
             (1, -1), (1, 0), (1, 1)
@@ -651,7 +684,7 @@ class Chess:
         for dr, dc in directions:
             r, c = row + dr, col + dc
             if 0 <= r < 8 and 0 <= c < 8:
-                other_figure = self.board[r][c]
+                other_figure: Figure = self.board[r][c]
                 move_key = Move((r, c))
 
                 # NOTE: Клетка свободна или занята фигурой противника
@@ -747,7 +780,7 @@ class Chess:
         possible_moves = []
         row, col = figure.position.value
 
-        # ТNOTE: Обход диагоналей
+        # NOTE: Обход диагоналей
         self.traverse_direction(figure,
                                 1, 1, row, col, possible_moves, is_under_protection_figure)
         self.traverse_direction(figure,
@@ -773,7 +806,7 @@ class Chess:
         from lib.king import King
         r, c = row + dr, col + dc
         while 0 <= r < 8 and 0 <= c < 8:
-            other_figure = self.board[r][c]
+            other_figure: Figure = self.board[r][c]
             move_key = Move((r, c))
 
             # NOTE: Клетка пустая
@@ -803,23 +836,23 @@ class Chess:
         possible_moves = []
         row, col = figure.position.value
 
-        # Все возможные смещения для хода коня
-        knight_moves = [
-            (-2, -1), (-2, 1),  # Верхние ходы
-            (-1, -2), (-1, 2),  # Ходы слева и справа
-            (1, -2), (1, 2),    # Ходы снизу слева и справа
-            (2, -1), (2, 1)     # Нижние ходы
+        # NOTE: Все возможные смещения для хода коня
+        knight_moves: list[tuple[int, int]] = [
+            (-2, -1), (-2, 1),  # NOTE: Верхние ходы
+            (-1, -2), (-1, 2),  # NOTE: Ходы слева и справа
+            (1, -2), (1, 2),  # NOTE: Ходы снизу слева и справа
+            (2, -1), (2, 1)  # NOTE: Нижние ходы
         ]
 
         for dr, dc in knight_moves:
             new_row, new_col = row + dr, col + dc
 
-            # Проверяем, что клетка находится в пределах доски
+            # NOTE: Проверяем, что клетка находится в пределах доски
             if 0 <= new_row < 8 and 0 <= new_col < 8:
                 move = Move((new_row, new_col))
                 cell = self.board[new_row][new_col]
 
-                # Если клетка пуста или занята фигурой противника, добавляем ход
+                # NOTE: Если клетка пуста или занята фигурой противника, добавляем ход
                 if cell is None or cell.side != figure.side:
                     possible_moves.append(move)
                 elif is_under_protection_figure:
@@ -870,23 +903,23 @@ class Chess:
             enpassant_row = row
             enpassant_col = col + dc
             if 0 <= enpassant_col < 8:
-                # Находим фигуру, которую можно взять на проходе
+                # NOTE: Находим фигуру, которую можно взять на проходе
                 enpassant_figure = self.board[enpassant_row][enpassant_col]
                 if (
                     isinstance(enpassant_figure, Pawn)
                     and enpassant_figure.side != figure.side
                     and enpassant_figure.is_enpassant
-                    # Клетка позади должна быть свободной
+                    # NOTE: Клетка позади должна быть свободной
                     and self.board[diag_row][diag_col] is None
                 ):
                     possible_moves.append(Move((diag_row, diag_col)))
 
         return possible_moves
 
-# NOTE: СЕКЦИЯ ШАХА
+# NOTE: СЕКЦИЯ ПРОВЕРКИ НА ШАХ
 
-    def check(self):
-        result = self.is_king_in_check(
+    def check(self) -> None:
+        result: tuple[bool, list[Figure]] = self.is_king_in_check(
             self.board, self.controll_side, self.white_attack_cells, self.black_attack_cells)
 
         self.check_king["is_check"] = result[0]
@@ -898,7 +931,7 @@ class Chess:
         Проверка на наличие шаха для короля.
         """
         is_check = False
-        attack_cells = black_attack_cells if side == Side.WHITE else white_attack_cells
+        attack_cells: set[Move] = black_attack_cells if side == Side.WHITE else white_attack_cells
         for cell in attack_cells:
             cell_figure = board[cell.value[0]][cell.value[1]]
             if isinstance(cell_figure, King) and cell_figure.side == self.controll_side:
@@ -931,7 +964,7 @@ class Chess:
 
         self.calculate_attack_positions(
             temp_board, white_attack_cells, black_attack_cells)
-        is_check = self.is_king_in_check(
+        is_check: tuple[bool, list[Figure]] = self.is_king_in_check(
             temp_board, figure.side, white_attack_cells, black_attack_cells)
 
         temp_board[old_position.value[0]][old_position.value[1]] = figure
@@ -956,39 +989,38 @@ class Chess:
                 col_num = 0
             return possible_moves
 
-        # Позиция короля
         king: King = self.get_king(self.controll_side)
         if king is None:
             return possible_moves
 
-        # Клетки, атакуемые атакующими фигурами
         attacked_cells = set()
         for attacker in self.check_king["attacking_figure"]:
             attacked_cells.update(attacker.attacked_cells)
 
         king_moves: list[Move] = self.get_king_possible_moves(king)
-        # Если шах объявлен одной фигурой
+        # NOTE: Если шах объявлен одной фигурой
         if len(self.check_king["attacking_figure"]) == 1:
             attacker: Figure = self.check_king["attacking_figure"][0]
 
-            # 1. Король может попытаться уйти
+            # NOTE: 1. Король может попытаться уйти
             for move in king_moves:
                 if move not in attacked_cells:  # Безопасная клетка
                     possible_moves.append(move)
 
-            # 2. Фигуры могут захватить атакующую фигуру
+            # NOTE: 2. Фигуры могут захватить атакующую фигуру
             possible_moves.append(attacker.position)
 
-            # 3. Фигуры могут блокировать шах (только для линейных фигур)
+            # NOTE: 3. Фигуры могут блокировать шах (только для линейных фигур)
             if attacker.figure_type in {Figure_type.b_bishop, Figure_type.w_bishop, Figure_type.b_rook, Figure_type.w_rook, Figure_type.b_queen, Figure_type.w_queen}:
                 path_to_king: list[Move] = self.get_path_between_positions(
                     attacker.position, king.position)
                 possible_moves.extend(path_to_king)
 
-        # Если шах объявлен двумя фигурами, только король может уйти
+        # NOTE: Если шах объявлен двумя фигурами, только король может уйти
         elif len(self.check_king["attacking_figure"]) > 1:
             for move in king_moves:
-                if move not in attacked_cells:  # Безопасная клетка
+                # NOTE: Безопасная клетка
+                if move not in attacked_cells:
                     possible_moves.append(move)
 
         return possible_moves
@@ -1025,18 +1057,45 @@ class Chess:
                         found_matches.append(
                             (figure, figure.position, matching_moves))
 
-        # Вывод фигур с совпадениями
-        for figure, position, matches in found_matches:
-            print(f"Figure: {figure}, Position: {
-                  position}, Matching Moves: {matches}")
+        # for figure, position, matches in found_matches:
+        #     print(f"Figure: {figure}, Position: {position}, Matching Moves: {matches}")
 
         if len(found_matches) == 1 and isinstance(found_matches[0][0], King):
             for move in found_matches[0][2]:
                 if self.is_cell_under_attack(move, self.controll_side):
                     found_matches[0][2].remove(move)
 
-            # Если был найден только король, но у него нет возможных ходов, то это мат
+            # NOTE: Если был найден только король, но у него нет возможных ходов, то это мат
             return len(found_matches[0][2]) == 0
 
-        # Если есть совпадения, то это не мат
+        # NOTE: Если есть совпадения, то это не мат
         return len(found_matches) == 0
+
+# NOTE: СЕКЦИЯ ПРОВЕРКИ НА ПАТ
+
+    def is_stalemate(self) -> bool:
+        fig = []
+        for row in self.board:
+            for figure in row:
+                if figure and figure.side == self.controll_side:
+                    fig.append(figure)
+
+        possible_moves = {
+            'figure': "",
+            'figure_type': "",
+            'possible_moves': [],
+            'possition': "",
+        }
+
+        for figure in fig:
+            possible_moves['figure'] = figure
+            possible_moves['figure_type'] = figure.figure_type.name
+            possible_moves['possible_moves'].extend(figure.possible_moves)
+            possible_moves['possition'] = figure.position
+
+        possible_moves['possible_moves'] = [
+            move for move in possible_moves['possible_moves']
+            if not self.is_kingcheck_after_move(possible_moves['figure'], move)
+        ]
+
+        return len(possible_moves['possible_moves']) == 0

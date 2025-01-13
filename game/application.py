@@ -29,51 +29,61 @@ class Application:
         self.running: bool = False
 
         ServiceLocator.register(Application, self)
-        ServiceLocator.register(ResourcesService, ResourcesService())
-        ServiceLocator.register(Chess, Chess())
-        ServiceLocator.register(SurfaceManager, SurfaceManager())
-        ServiceLocator.register(Board, Board())
-        ServiceLocator.register(Input, Input())
-        ServiceLocator.register(
+        self.resources_service: ResourcesService = ServiceLocator.register(
+            ResourcesService, ResourcesService())
+        self.chess: Chess = ServiceLocator.register(Chess, Chess())
+        self.surface_manager: SurfaceManager = ServiceLocator.register(
+            SurfaceManager, SurfaceManager())
+        self.board: Board = ServiceLocator.register(Board, Board())
+        self.input: Input = ServiceLocator.register(
+            Input, Input(self.surface_manager))
+        self.figure_dmanager: FigureDisplayManager = ServiceLocator.register(
             FigureDisplayManager, FigureDisplayManager(self.screen))
 
         self.restart_btn = Button(
             BTN_POSITION[0], BTN_POSITION[1], BTN_WIDTH, BTN_HEIGHT, text="Restart", action=self.restart, surface=self.screen)
-        self.qunt_moves_textui = TextUI(
-            BTN_POSITION[0] - BTN_WIDTH/2, BTN_POSITION[1] - BTN_HEIGHT/2 + 75, SCORE_WIDTH, SCORE_HEIGHT, text="100 : 100", font=pg.font.Font(None, 60))
+        self.qunt_moves_textui = TextUI(BTN_POSITION[0] - BTN_WIDTH/2, BTN_POSITION[1] - BTN_HEIGHT /
+                                        2 + 75, SCORE_WIDTH, SCORE_HEIGHT, text="100 : 100", font=pg.font.Font(None, 60))
+        self.status_textui = TextUI(BTN_POSITION[0] - BTN_WIDTH/2, BTN_POSITION[1] - BTN_HEIGHT /
+                                    2 + 110, SCORE_WIDTH, SCORE_HEIGHT, text="100 : 100", font=pg.font.Font(None, 30))
         self.layout = SwitchPawnLayout(0, HEIGHT/3, WIDTH, HEIGHT/4)
         # self.layout2 = SwitchPawnLayout(WIDTH/2, HEIGHT/2, WIDTH/5, HEIGHT/5, fill_color=YELLOW)
         # self.layout3 = SwitchPawnLayout(0, 0, WIDTH/1.2, HEIGHT/4, fill_color=GREEN)
 
-        self.entity_register(ServiceLocator.get(Input))
-        self.entity_register(ServiceLocator.get(Board))
-        self.entity_register(ServiceLocator.get(FigureDisplayManager))
+        self.entity_register(self.input)
+        self.entity_register(self.board)
+        self.entity_register(self.figure_dmanager)
         self.entity_register(self.restart_btn)
         self.entity_register(self.qunt_moves_textui)
+        self.entity_register(self.status_textui)
 
-        ServiceLocator.get(SurfaceManager).add_surface(
+        self.surface_manager.add_surface(
             self.screen, self.screen.get_rect(), 0, is_main=True)
-        ServiceLocator.get(Input).quit_down_register(self.application_quit)
-        ServiceLocator.get(Chess).register_next_turn_handler(
-            ServiceLocator.get(FigureDisplayManager).recall_figures)
-        ServiceLocator.get(Chess).register_next_turn_handler(lambda chess: self.qunt_moves_textui.set_text(
+        self.input.quit_down_register(self.application_quit)
+        self.chess.register_next_turn_handler(
+            self.figure_dmanager.recall_figures)
+        self.chess.register_next_turn_handler(lambda chess: self.qunt_moves_textui.set_text(
             f"{chess.half_move_number} : {chess.move_number}"))
+        self.chess.register_chess_message_handler(
+            lambda message: self.status_textui.set_text(message))
 
     def restart(self, sender: UiElement) -> None:
-        ServiceLocator.get(Chess).restart()
-        ServiceLocator.get(FigureDisplayManager).restart()
+        self.chess.restart()
+        self.figure_dmanager.restart()
 
     def run(self) -> None:
         self.running = True
-        ServiceLocator.get(Chess).start()
+        self.chess.start()
 
         # NOTE: FEN sample
-        # fen = "r3k2r/3b4/pqn1pnp1/1ppp1p1p/PbPP1PBP/BPNQPNP1/8/R3K2R b KQkq - 13 14"
-        # fen = "rnbqkbnr/ppppp1pp/8/P7/5p2/8/1PPPPPPP/RNBQKBNR w KQkq - 2 2"
+        # fen = "r3k2r/3b4/pqn1pnp1/1ppp1p1p/PbPP1PBP/BPNQPNP1/8/R3K2R b KQkq - 13 14" # хаос
+        # fen = "k7/P2P3P/5P2/2Q2P2/8/8/8/2BQKBNR w KQkq - 27 27" # мат или пат черному
+        # fen = "r1bqkb1r/pppp1ppp/2n2n2/4p2Q/2B1P3/8/PPPP1PPP/RNB1K1NR w KQkq - 3 3" # детский мат черному
+        # превращение пешек на следующем ходу
         fen = "rnbqkbnr/2ppppPP/8/8/8/8/ppPPPP2/RNBQKBNR w KQkq - 8 8"
-        ServiceLocator.get(Chess).from_fen(fen)
-        ServiceLocator.get(FigureDisplayManager).restart()
-        ServiceLocator.get(Chess).start(False)
+        self.chess.from_fen(fen)
+        self.figure_dmanager.restart()
+        self.chess.start(False)
 
         while self.running:
             self.screen.fill(BLACK)
@@ -91,9 +101,7 @@ class Application:
         for idrawable in self.drawable:
             if isinstance(idrawable, IDrawable):
                 idrawable.draw(self.screen)
-
-        ServiceLocator.get(SurfaceManager).draw_surfaces()
-        pass
+        self.surface_manager.draw_surfaces()
 
     def entity_register(self, entity: Entity) -> None:
         if isinstance(entity, IUpdatable):

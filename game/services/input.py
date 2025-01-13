@@ -7,15 +7,16 @@ from game.services.service_locator import ServiceLocator
 
 
 class Input(IUpdatable):
-    def __init__(self):
+    from game.ui.surface.surface_manager import SurfaceManager
+
+    def __init__(self, surface_manager: SurfaceManager):
         from game.ui.surface.surface_manager import SurfaceManager
 
         self.mouse_left_down_handlers: list[tuple[ISurfaceble, Callable[[], None]]] = [
         ]
         self.mouse_left_up_handlers: list[tuple[ISurfaceble, Callable[[], None]]] = [
         ]
-        self.surface_manager: SurfaceManager = ServiceLocator.get(
-            SurfaceManager)
+        self.surface_manager: SurfaceManager = surface_manager
 
         self.mouse_pos: tuple[int, int] = (0, 0)
         self.is_mouse_left: bool = False

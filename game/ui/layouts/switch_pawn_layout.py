@@ -35,10 +35,19 @@ class SwitchPawnLayout(Layout):
                             action=lambda x: self.choose_figure(Figure_type.w_bishop if self.switch_pawn.side == Side.WHITE else Figure_type.b_bishop), surface=self._surface)
         knight_btn = Button(0, 0, 100, 100, text="Knight",
                             action=lambda x: self.choose_figure(Figure_type.w_knight if self.switch_pawn.side == Side.WHITE else Figure_type.b_knight), surface=self._surface)
+
         queen_btn.change_picture(self.w_queen_pic)
+        queen_btn.change_hover_picture(self.w_queen_shine_pic)
+
         rook_btn.change_picture(self.w_rook_pic)
+        rook_btn.change_hover_picture(self.w_rook_shine_pic)
+
         bishop_btn.change_picture(self.w_bigshop_pic)
+        bishop_btn.change_hover_picture(self.w_bishop_shine_pic)
+
         knight_btn.change_picture(self.w_knight_pic)
+        knight_btn.change_hover_picture(self.w_knight_shine_pic)
+
         self.add_element(queen_btn)
         self.add_element(rook_btn)
         self.add_element(bishop_btn)
@@ -72,6 +81,15 @@ class SwitchPawnLayout(Layout):
             Figure_type.w_king.name)
         self.b_king_pic: pg.Surface = resourcesService.get_resource(
             Figure_type.b_king.name)
+
+        self.w_queen_shine_pic: pg.Surface = resourcesService.get_resource(
+            "w_queen_shine")
+        self.w_knight_shine_pic: pg.Surface = resourcesService.get_resource(
+            "w_knight_shine")
+        self.w_bishop_shine_pic: pg.Surface = resourcesService.get_resource(
+            "w_bishop_shine")
+        self.w_rook_shine_pic: pg.Surface = resourcesService.get_resource(
+            "w_rook_shine")
 
     def switch_pawn_handler(self, figure: Pawn) -> None:
         self.switch_pawn: Pawn = figure

@@ -1,4 +1,11 @@
 from game.application import Application
+import asyncio
 
-app = Application()
-app.run()
+
+async def main():
+    app = Application()
+    app.run()
+    await asyncio.sleep(0.1)
+
+if __name__ == "__main__":
+    asyncio.run(main())

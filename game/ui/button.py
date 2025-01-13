@@ -51,6 +51,11 @@ class Button(UiElement):
         self.image = pg.transform.scale(self.image, (self.width, self.height))
         self.current_image = self.image
 
+    def change_hover_picture(self, pic: pg.Surface) -> None:
+        self.hover_image: pg.Surface = pic
+        self.hover_image = pg.transform.scale(
+            self.hover_image, (self.width, self.height))
+
     def draw(self, surface: pg.Surface) -> None:
         super().draw(surface)
         surface.blit(self.current_image, self.rect)
