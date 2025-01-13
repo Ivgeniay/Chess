@@ -45,7 +45,7 @@ class Application:
         self.qunt_moves_textui = TextUI(BTN_POSITION[0] - BTN_WIDTH/2, BTN_POSITION[1] - BTN_HEIGHT /
                                         2 + 75, SCORE_WIDTH, SCORE_HEIGHT, text="100 : 100", font=pg.font.Font(None, 60))
         self.status_textui = TextUI(BTN_POSITION[0] - BTN_WIDTH/2, BTN_POSITION[1] - BTN_HEIGHT /
-                                    2 + 110, SCORE_WIDTH, SCORE_HEIGHT, text="100 : 100", font=pg.font.Font(None, 30))
+                                    2 + 110, SCORE_WIDTH, SCORE_HEIGHT, text="", font=pg.font.Font(None, 30))
         self.layout = SwitchPawnLayout(0, HEIGHT/3, WIDTH, HEIGHT/4)
 
         self.entity_register(self.input)

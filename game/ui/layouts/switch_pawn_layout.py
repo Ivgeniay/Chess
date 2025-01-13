@@ -28,16 +28,16 @@ class SwitchPawnLayout(Layout):
         self.figure_dis_manager: FigureDisplayManager = ServiceLocator.get(
             FigureDisplayManager)
 
-        queen_btn = Button(0, 0, 100, 100, text="Queen",
+        queen_btn = Button(0, 0, 100, 100, text="",
                            action=lambda: self.choose_figure(Figure_type.w_queen if self.switch_pawn.side == Side.WHITE else Figure_type.b_queen), surface=self._surface)
 
-        rook_btn = Button(0, 0, 100, 100, text="Rook",
+        rook_btn = Button(0, 0, 100, 100, text="",
                           action=lambda: self.choose_figure(Figure_type.w_rook if self.switch_pawn.side == Side.WHITE else Figure_type.b_rook), surface=self._surface)
 
-        bishop_btn = Button(0, 0, 100, 100, text="Bishop",
+        bishop_btn = Button(0, 0, 100, 100, text="",
                             action=lambda: self.choose_figure(Figure_type.w_bishop if self.switch_pawn.side == Side.WHITE else Figure_type.b_bishop), surface=self._surface)
 
-        knight_btn = Button(0, 0, 100, 100, text="Knight",
+        knight_btn = Button(0, 0, 100, 100, text="",
                             action=lambda: self.choose_figure(Figure_type.w_knight if self.switch_pawn.side == Side.WHITE else Figure_type.b_knight), surface=self._surface)
 
         queen_btn.change_picture(self.w_queen_pic)
