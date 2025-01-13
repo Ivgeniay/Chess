@@ -68,4 +68,4 @@ class Button(UiElement):
 
     def on_click(self) -> None:
         if self.on_btn_click_action is not None and self.is_hovered:
-            self.on_btn_click_action(self)
+            self.on_btn_click_action()

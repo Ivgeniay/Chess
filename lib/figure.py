@@ -18,6 +18,7 @@ class Figure(ABC):
         self.rect = (0, 0)
         self.positions_list: list[Move] = [self.position]
         self.attacked_cells: set[Move] = set()
+        # NOTE: Возможные ходы фигуры
         self.possible_moves: set[Move] = set()
 
     def get_chess_position(self) -> Move:

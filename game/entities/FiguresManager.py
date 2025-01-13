@@ -35,7 +35,8 @@ class FigureDisplayManager(IDrawable, IUpdatable, ISurfaceble):
     def surface(self) -> pg.Surface:
         return self._surface
 
-    def restart(self) -> None:
+    def restart(self, chess: Chess) -> None:
+        self.chess = chess
         self.recall_figures(self.chess)
 
     def download_sprites(self) -> None:

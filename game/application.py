@@ -41,14 +41,12 @@ class Application:
             FigureDisplayManager, FigureDisplayManager(self.screen))
 
         self.restart_btn = Button(
-            BTN_POSITION[0], BTN_POSITION[1], BTN_WIDTH, BTN_HEIGHT, text="Restart", action=self.restart, surface=self.screen)
+            BTN_POSITION[0], BTN_POSITION[1], BTN_WIDTH, BTN_HEIGHT, text="Restart", action=self.chess.restart, surface=self.screen)
         self.qunt_moves_textui = TextUI(BTN_POSITION[0] - BTN_WIDTH/2, BTN_POSITION[1] - BTN_HEIGHT /
                                         2 + 75, SCORE_WIDTH, SCORE_HEIGHT, text="100 : 100", font=pg.font.Font(None, 60))
         self.status_textui = TextUI(BTN_POSITION[0] - BTN_WIDTH/2, BTN_POSITION[1] - BTN_HEIGHT /
                                     2 + 110, SCORE_WIDTH, SCORE_HEIGHT, text="100 : 100", font=pg.font.Font(None, 30))
         self.layout = SwitchPawnLayout(0, HEIGHT/3, WIDTH, HEIGHT/4)
-        # self.layout2 = SwitchPawnLayout(WIDTH/2, HEIGHT/2, WIDTH/5, HEIGHT/5, fill_color=YELLOW)
-        # self.layout3 = SwitchPawnLayout(0, 0, WIDTH/1.2, HEIGHT/4, fill_color=GREEN)
 
         self.entity_register(self.input)
         self.entity_register(self.board)
@@ -66,23 +64,24 @@ class Application:
             f"{chess.half_move_number} : {chess.move_number}"))
         self.chess.register_chess_message_handler(
             lambda message: self.status_textui.set_text(message))
-
-    def restart(self, sender: UiElement) -> None:
-        self.chess.restart()
-        self.figure_dmanager.restart()
+        self.chess.register_chess_restart_handler(
+            self.figure_dmanager.restart)
 
     def run(self) -> None:
         self.running = True
         self.chess.start()
 
         # NOTE: FEN sample
-        # fen = "r3k2r/3b4/pqn1pnp1/1ppp1p1p/PbPP1PBP/BPNQPNP1/8/R3K2R b KQkq - 13 14" # хаос
-        # fen = "k7/P2P3P/5P2/2Q2P2/8/8/8/2BQKBNR w KQkq - 27 27" # мат или пат черному
-        # fen = "r1bqkb1r/pppp1ppp/2n2n2/4p2Q/2B1P3/8/PPPP1PPP/RNB1K1NR w KQkq - 3 3" # детский мат черному
+        # # хаос
+        # fen = "r3k2r/3b4/pqn1pnp1/1ppp1p1p/PbPP1PBP/BPNQPNP1/8/R3K2R b KQkq - 13 14"
+        # мат или пат черному
+        fen = "k7/P2P3P/5P2/2Q2P2/8/8/8/2BQKBNR w KQkq - 27 27"
+        # # детский мат черному
+        # fen = "r1bqkb1r/pppp1ppp/2n2n2/4p2Q/2B1P3/8/PPPP1PPP/RNB1K1NR w KQkq - 3 3"
         # превращение пешек на следующем ходу
-        fen = "rnbqkbnr/2ppppPP/8/8/8/8/ppPPPP2/RNBQKBNR w KQkq - 8 8"
+        # fen = "rnbqkbnr/2ppppPP/8/8/8/8/ppPPPP2/RNBQKBNR w KQkq - 8 8"
         self.chess.from_fen(fen)
-        self.figure_dmanager.restart()
+        self.figure_dmanager.restart(self.chess)
         self.chess.start(False)
 
         while self.running:

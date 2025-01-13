@@ -50,6 +50,9 @@ class Chess:
         self.stalemate_handlers: list[Callable[[None], None]] = []
         self.switch_pawn_handlers: list[Callable[[Pawn], None]] = []
         self.chess_message_handlers: list[Callable[[str], None]] = []
+        self.chess_restart_handlers: list[Callable[[Chess], None]] = []
+
+        # NOTE: текущая сторона под шахом, позиции на которые может встать фигура чтобы закрыть короля или куда может отойти король, список атакующих короля фигур
         self.check_king = {
             "is_check": False,
             "possible_moves": [],
@@ -203,7 +206,7 @@ class Chess:
         # Пересчитать атакующие клетки
         self.calculate_attack_positions(
             self.board, self.white_attack_cells, self.black_attack_cells)
-        self.update_possible_moves()
+        # self.update_possible_moves()
 
     def get_fen(self) -> str:
         """
@@ -304,9 +307,12 @@ class Chess:
         Метод перезапуска шахматной партии. Уничтожение всех фигур на доске и инициализация новой доски.
         """
 
+        self._stop_figure_moving = False
         self.destroy_all_figures()
         self.initialize_bord()
         self.next_turn()
+        self.call_chess_restart_event()
+        self.call_chess_message_event("")
         pass
 
     def start(self, is_call_next_turn=True) -> None:
@@ -403,6 +409,21 @@ class Chess:
         for handler in self.chess_message_handlers:
             handler(message)
 
+    def register_chess_restart_handler(self, handler: Callable[["Chess"], None]) -> None:
+        """
+        Регистрация обработчика события "рестарт".
+
+        :param handler: Обработчик события "рестарт".
+        """
+        self.chess_restart_handlers.append(handler)
+
+    def call_chess_restart_event(self) -> None:
+        """
+        Метод вызова события "рестарт" для подписчиков события.
+        """
+        for handler in self.chess_restart_handlers:
+            handler(self)
+
 # NOTE: СЕКЦИЯ ДВИЖЕНИЯ ФИГУР
 
     def move_figure(self, figure: Figure, move_to: Move) -> None:
@@ -435,14 +456,16 @@ class Chess:
                 self.board[old_position.value[0]][old_position.value[1]] = None
                 figure.set_new_position(move_to)
 
-        if isinstance(figure, Pawn):
-            if self.is_pawn_at_end(figure):
-                self._stop_figure_moving = True
-                self.call_switch_pawn_event(figure)
+        if isinstance(figure, Pawn) and self.is_pawn_at_end(figure):
+            # if self.is_pawn_at_end(figure):
+            self._stop_figure_moving = True
+            figure.last_action()
+            self.call_switch_pawn_event(figure)
 
-        figure.last_action()
-        self.nullify_on_passant(figure)
-        self.next_turn()
+        else:
+            figure.last_action()
+            self.nullify_on_passant(figure)
+            self.next_turn()
 
     def eating_figure(self, eating_figures: Figure, eaten_figure: Figure) -> None:
         """
@@ -544,6 +567,9 @@ class Chess:
         self.board[figure.position.value[0]
                    ][figure.position.value[1]] = new_figure
         self._stop_figure_moving = False
+
+        self.nullify_on_passant(figure)
+        self.next_turn()
 
     def is_cell_under_attack(self, move: Move, side: Side) -> bool:
         """
@@ -925,6 +951,10 @@ class Chess:
         self.check_king["is_check"] = result[0]
         self.check_king["attacking_figure"] = result[1]
         self.check_king["possible_moves"] = self.refresh_possible_moves_kingcheck()
+
+        print(f"possible moves to safe king: {
+              self.check_king["possible_moves"]}")
+        # print(f"king possible moves: {self.get_king(self.controll_side).possible_moves}")
 
     def is_king_in_check(self, board: list[list[Figure]], side: Side, white_attack_cells: set[Move], black_attack_cells: set[Move]) -> tuple[bool, list[Figure]]:
         """
